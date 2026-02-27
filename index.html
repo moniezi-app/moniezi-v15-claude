@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <!-- PWA -->
-    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="manifest" href="manifest.webmanifest" />
     <meta name="theme-color" content="#0b1020" />
 
     <!--
@@ -491,14 +491,17 @@
 
     <script type="module" src="index.tsx"></script>
 
-    <!-- Service Worker registration — plain <script> so Vite does NOT strip it -->
+    <!-- SW registration: MUST be plain <script> (not type=module) so Vite doesn't strip it -->
     <script>
       if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/service-worker.js').then(function(reg) {
-          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-        }).catch(function(e) {
-          console.warn('[SW] reg failed:', e);
-        });
+        var base = document.querySelector('script[src*="/assets/"]');
+        var prefix = base ? base.src.replace(/assets\/.*/, '') : '/moniezi-v15-claude/';
+        if (prefix.indexOf('http') === 0) {
+          prefix = new URL(prefix).pathname;
+        }
+        navigator.serviceWorker.register(prefix + 'service-worker.js', { scope: prefix })
+          .then(function(r) { if (r.waiting) r.waiting.postMessage({ type: 'SKIP_WAITING' }); })
+          .catch(function(e) { console.warn('[SW]', e); });
       }
     </script>
   </body>
