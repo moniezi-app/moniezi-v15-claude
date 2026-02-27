@@ -7,25 +7,23 @@
 // v15.1.4: restore safe precache so iOS A2HS can launch offline on FIRST open.
 // The previous "no precache" change prevented the app shell from being available
 // when offline at cold start.
-const CACHE_VERSION = "moniezi-core-v0.1.0-2026-02-27a";
+const CACHE_VERSION = "moniezi-core-v0.1.0-2026-02-27b";
 const CACHE_NAME = `moniezi-cache-${CACHE_VERSION}`;
 
-// Resolve an asset relative to the service worker scope
-const toScopeUrl = (path) => new URL(path, self.registration.scope).toString();
-
-// Core assets to pre-cache
+// Core assets to pre-cache — use absolute paths so cache keys match
+// the absolute navigation URLs iOS uses when launching from home screen.
 const CORE_ASSETS = [
-  "./",
-  "./index.html",
-  "./manifest.webmanifest",
-  "./icons/icon-192.png",
-  "./icons/icon-512.png",
-  "./icons/icon-192-maskable.png",
-  "./icons/icon-512-maskable.png",
-  "./icons/apple-touch-icon.png",
-  "./favicon.ico",
-  "./favicon-32.png",
-].map(toScopeUrl);
+  "/",
+  "/index.html",
+  "/manifest.webmanifest",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/icons/icon-192-maskable.png",
+  "/icons/icon-512-maskable.png",
+  "/icons/apple-touch-icon.png",
+  "/favicon.ico",
+  "/favicon-32.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
@@ -87,11 +85,11 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         const cache = await caches.open(CACHE_NAME);
 
-        // Always prefer cached app shell — this prevents iOS from attempting network.
-        const cachedIndex = await cache.match(toScopeUrl("./index.html"));
+        // Always prefer cached app shell — absolute path matches iOS navigation URL.
+        const cachedIndex = await cache.match("/index.html");
         if (cachedIndex) return cachedIndex;
 
-        const cachedRoot = await cache.match(toScopeUrl("./"));
+        const cachedRoot = await cache.match("/");
         if (cachedRoot) return cachedRoot;
 
         // Only attempt network if we have absolutely nothing cached yet
@@ -99,7 +97,7 @@ self.addEventListener("fetch", (event) => {
         try {
           const fresh = await fetch(req);
           if (fresh && fresh.ok) {
-            cache.put(toScopeUrl("./index.html"), fresh.clone());
+            cache.put("/index.html", fresh.clone());
           }
           return fresh;
         } catch (e) {
