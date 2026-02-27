@@ -491,19 +491,13 @@
 
     <script type="module" src="index.tsx"></script>
 
-    <!-- Service Worker (PWA) -->
-    <!-- CRITICAL: This MUST be a plain <script>, NOT <script type="module">.
-         Vite processes module scripts and bundles them into the main JS chunk,
-         which means SW registration only happens AFTER the 3MB+ bundle loads.
-         A plain script runs immediately and is left untouched by Vite. -->
+    <!-- Service Worker registration — plain <script> so Vite does NOT strip it -->
     <script>
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/service-worker.js').then(function(reg) {
-          if (reg.waiting) {
-            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
-          }
+          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
         }).catch(function(e) {
-          console.warn('[PWA] SW registration failed:', e);
+          console.warn('[SW] reg failed:', e);
         });
       }
     </script>
