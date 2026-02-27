@@ -95,6 +95,8 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <!-- Suppress iOS "Turn Off Airplane Mode" dialog by hinting offline capability -->
+    <meta name="apple-mobile-web-app-cache" content="yes" />
 
     <title>MONIEZI</title>
 
@@ -490,17 +492,29 @@
     <script type="module" src="index.tsx"></script>
 
     <!-- Service Worker (PWA) -->
+    <!-- Register SW immediately (not on 'load') so it can intercept navigation on first open.
+         This prevents iOS from showing the "Turn Off Airplane Mode" dialog when the app
+         is opened from the home screen while offline — the SW takes control before iOS
+         attempts a network fetch. -->
     <script type="module">
       if (import.meta.env.PROD && "serviceWorker" in navigator) {
-        window.addEventListener("load", async () => {
+        // Register immediately — do NOT wait for 'load' event.
+        // On iOS, waiting for 'load' means the SW isn't controlling the page until
+        // after the network attempt has already happened, triggering the airplane mode dialog.
+        (async () => {
           try {
-            await navigator.serviceWorker.register(
+            const reg = await navigator.serviceWorker.register(
               `${import.meta.env.BASE_URL}service-worker.js`
             );
+            // If a SW is already active and controlling, we're good.
+            // If a new SW just installed, activate it immediately.
+            if (reg.waiting) {
+              reg.waiting.postMessage({ type: "SKIP_WAITING" });
+            }
           } catch (e) {
             console.warn("[PWA] Service worker registration failed:", e);
           }
-        });
+        })();
       }
     </script>
   </body>

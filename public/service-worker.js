@@ -7,7 +7,7 @@
 // v15.1.4: restore safe precache so iOS A2HS can launch offline on FIRST open.
 // The previous "no precache" change prevented the app shell from being available
 // when offline at cold start.
-const CACHE_VERSION = "moniezi-core-v0.1.0-2026-02-26c";
+const CACHE_VERSION = "moniezi-core-v0.1.0-2026-02-27a";
 const CACHE_NAME = `moniezi-cache-${CACHE_VERSION}`;
 
 // Resolve an asset relative to the service worker scope
@@ -78,35 +78,48 @@ self.addEventListener("fetch", (event) => {
   // Only handle same-origin requests
   if (url.origin !== self.location.origin) return;
 
-  // Navigation requests: CACHE-FIRST (offline-first)
-  // Why: iOS can show an intrusive "Turn Off Airplane Mode" prompt if we try network-first
-  // while the device is offline/airplane mode. MONIEZI should treat offline as normal.
+  // Navigation requests: CACHE-FIRST, never trigger network when offline.
+  // iOS shows a native "Turn Off Airplane Mode" dialog if any network fetch fails.
+  // By responding from cache only (and never letting the request reach the network
+  // while offline), we prevent that dialog from appearing.
   if (req.mode === "navigate") {
     event.respondWith(
       (async () => {
         const cache = await caches.open(CACHE_NAME);
 
-        // Prefer cached app shell immediately.
+        // Always prefer cached app shell — this prevents iOS from attempting network.
         const cachedIndex = await cache.match(toScopeUrl("./index.html"));
         if (cachedIndex) return cachedIndex;
 
-        // Fallback: try network only if we don't have the shell cached yet.
+        const cachedRoot = await cache.match(toScopeUrl("./"));
+        if (cachedRoot) return cachedRoot;
+
+        // Only attempt network if we have absolutely nothing cached yet
+        // (very first install, must be online at this point anyway).
         try {
-          const fresh = await fetch(req, { cache: "force-cache" });
+          const fresh = await fetch(req);
           if (fresh && fresh.ok) {
             cache.put(toScopeUrl("./index.html"), fresh.clone());
           }
           return fresh;
         } catch (e) {
-          const cachedRoot = await cache.match(toScopeUrl("./"));
-          return cachedRoot || Response.error();
+          // Return a minimal offline fallback so the app doesn't show a blank error.
+          return new Response(
+            `<!DOCTYPE html><html><head><meta charset="UTF-8">
+             <meta name="viewport" content="width=device-width,initial-scale=1">
+             <style>body{background:#0b1020;color:#fff;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;flex-direction:column;gap:12px;}
+             .logo{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,#3b82f6,#6366f1);display:flex;align-items:center;justify-content:center;font-size:32px;}
+             </style></head>
+             <body><div class="logo">M</div><b>MONIEZI</b><p style="opacity:.6;font-size:14px">Loading your data…</p></body></html>`,
+            { headers: { "Content-Type": "text/html" } }
+          );
         }
       })()
     );
     return;
   }
 
-  // All other assets: cache-first, then network
+  // All other assets: cache-first, then network (only if online)
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
@@ -114,13 +127,13 @@ self.addEventListener("fetch", (event) => {
       if (cached) return cached;
 
       try {
-        const res = await fetch(req, { cache: "force-cache" });
+        const res = await fetch(req);
         if (res && res.ok) {
           cache.put(req, res.clone());
         }
         return res;
       } catch (e) {
-        return cached || Response.error();
+        return Response.error();
       }
     })()
   );
