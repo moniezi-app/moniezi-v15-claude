@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <!-- PWA -->
-    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <meta name="theme-color" content="#0b1020" />
 
     <!--
@@ -492,29 +492,19 @@
     <script type="module" src="index.tsx"></script>
 
     <!-- Service Worker (PWA) -->
-    <!-- Register SW immediately (not on 'load') so it can intercept navigation on first open.
-         This prevents iOS from showing the "Turn Off Airplane Mode" dialog when the app
-         is opened from the home screen while offline — the SW takes control before iOS
-         attempts a network fetch. -->
-    <script type="module">
-      if (import.meta.env.PROD && "serviceWorker" in navigator) {
-        // Register immediately — do NOT wait for 'load' event.
-        // On iOS, waiting for 'load' means the SW isn't controlling the page until
-        // after the network attempt has already happened, triggering the airplane mode dialog.
-        (async () => {
-          try {
-            const reg = await navigator.serviceWorker.register(
-              `${import.meta.env.BASE_URL}service-worker.js`
-            );
-            // If a SW is already active and controlling, we're good.
-            // If a new SW just installed, activate it immediately.
-            if (reg.waiting) {
-              reg.waiting.postMessage({ type: "SKIP_WAITING" });
-            }
-          } catch (e) {
-            console.warn("[PWA] Service worker registration failed:", e);
+    <!-- CRITICAL: This MUST be a plain <script>, NOT <script type="module">.
+         Vite processes module scripts and bundles them into the main JS chunk,
+         which means SW registration only happens AFTER the 3MB+ bundle loads.
+         A plain script runs immediately and is left untouched by Vite. -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/service-worker.js').then(function(reg) {
+          if (reg.waiting) {
+            reg.waiting.postMessage({ type: 'SKIP_WAITING' });
           }
-        })();
+        }).catch(function(e) {
+          console.warn('[PWA] SW registration failed:', e);
+        });
       }
     </script>
   </body>
