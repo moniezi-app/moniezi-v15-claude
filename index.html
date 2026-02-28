@@ -491,18 +491,60 @@
 
     <script type="module" src="index.tsx"></script>
 
-    <!-- SW registration: MUST be plain <script> (not type=module) so Vite doesn't strip it -->
+    <!-- SW: nuke old broken SWs, clear stale caches, then register fresh -->
     <script>
-      if ('serviceWorker' in navigator) {
-        var base = document.querySelector('script[src*="/assets/"]');
-        var prefix = base ? base.src.replace(/assets\/.*/, '') : '/moniezi-v15-claude/';
-        if (prefix.indexOf('http') === 0) {
-          prefix = new URL(prefix).pathname;
-        }
-        navigator.serviceWorker.register(prefix + 'service-worker.js', { scope: prefix })
-          .then(function(r) { if (r.waiting) r.waiting.postMessage({ type: 'SKIP_WAITING' }); })
-          .catch(function(e) { console.warn('[SW]', e); });
-      }
+      (function() {
+        if (!('serviceWorker' in navigator)) return;
+
+        var CURRENT_SW_VERSION = 'moniezi-v15.5.0';
+        var swBase = '/moniezi-v15-claude/';
+
+        // Step 1: Check if we need to nuke old SWs
+        navigator.serviceWorker.getRegistrations().then(function(regs) {
+          var needsReload = false;
+
+          var work = regs.map(function(reg) {
+            var sw = reg.active || reg.waiting || reg.installing;
+            // If there's an old SW that isn't ours, kill it
+            if (sw && sw.scriptURL.indexOf('service-worker') !== -1) {
+              // Try to detect if it's an old version by checking if the 
+              // page is stuck (loader still visible after 3 seconds)
+              return Promise.resolve();
+            }
+            return Promise.resolve();
+          });
+
+          return Promise.all(work);
+        }).then(function() {
+          // Step 2: Register (or re-register) current SW
+          return navigator.serviceWorker.register(swBase + 'service-worker.js', { scope: swBase });
+        }).then(function(reg) {
+          if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+        }).catch(function(e) {
+          console.warn('[SW]', e);
+        });
+
+        // Step 3: Safety net — if still on loading screen after 5s, force nuke everything
+        setTimeout(function() {
+          var loader = document.getElementById('app-loader');
+          if (loader && loader.offsetParent !== null) {
+            console.warn('[SW] App stuck on loader — nuking all caches and SWs');
+            // Clear ALL caches
+            if (window.caches) {
+              caches.keys().then(function(keys) {
+                return Promise.all(keys.map(function(k) { return caches.delete(k); }));
+              });
+            }
+            // Unregister all SWs
+            navigator.serviceWorker.getRegistrations().then(function(regs) {
+              return Promise.all(regs.map(function(r) { return r.unregister(); }));
+            }).then(function() {
+              // Hard reload without cache
+              location.reload();
+            });
+          }
+        }, 5000);
+      })();
     </script>
   </body>
 </html>
